@@ -1,0 +1,123 @@
+---
+title: "NGO Village Survey"
+author: "Suparna Shetty"
+date: "5/7/2021"
+output: html_document
+---
+=====================================================================================================================
+  (0) Initialization: Load libraries 
+---------------------------------------------------------------------------------------------------------------------
+```{r initialize}
+#empty environment
+rm(list=ls())
+library("splitstackshape")
+library("openxlsx")
+library("readxl")
+library("readr")
+library("rmarkdown")
+library("stringi")
+library("stringr")
+library("testthat")
+library("tidyr")
+library("tidyselect")
+library("validate")
+library("zip")
+library("R.utils")
+library("plotrix")
+library("bit64")
+library("plotly")
+library("writexl")
+```
+=====================================================================================================================
+  (0) Initialization: Load files 
+---------------------------------------------------------------------------------------------------------------------
+```{r initialize}
+#get raw data
+
+family_info <- read_xlsx("C:/Users/ss21418/Desktop/Personal project/Input files/family_info.xlsx")
+
+```
+
+=====================================================================================================================
+  (1) Basic clean up of loaded file 
+---------------------------------------------------------------------------------------------------------------------
+```{r initialize}
+#remove overall duplicates if any
+family_info_1 <- distinct(family_info)
+
+#remove timestamp since it is not needed for our analysis
+family_info_1 <- select(family_info_1,-Timestamp)
+
+#change all NA's to 0
+family_info_1[is.na(family_info_1)] <- 0
+
+#overall distinct after removing timestamp
+family_info_2 <- distinct(family_info_1)
+
+#Some names are either 0 or . These can be replaced by family head name 
+family_info_2$Info_provider_name <- ifelse(family_info_2$Info_provider_name=="0" | family_info_2$Info_provider_name==".",family_info_2$Family_Head_Name,family_info_2$Info_provider_name)
+
+```
+=====================================================================================================================
+  (2) Sorting out comma separated values in age related columns for better analysis
+---------------------------------------------------------------------------------------------------------------------
+```{r initialize}
+#choose the highest number in the comma separated values
+
+ #Since the strings are of different values we would need to create a function that mimics the left(), right() and mid() function in excel
+ left = function(text, num_char) 
+   {
+     substr(text, 1, num_char)
+   }
+ mid = function(text, start_num, num_char) 
+   {
+     substr(text, start_num, start_num + num_char - 1)
+   }
+ right = function(text, num_char) 
+   {
+     substr(text, nchar(text) - (num_char - 1), nchar(text))
+   }
+
+#applying the above created function
+family_info_2$`Children_(0_to_18_years)_[female]` <- right(family_info_2$`Children_(0_to_18_years)_[female]`,1)
+#testing the sample function
+table(family_info_2$`Children_(0_to_18_years)_[female]`)
+
+#applying the above function to the remaining age related columns
+family_info_2$`Children_(0_to_18_years)_[male]` <- right(family_info_2$`Children_(0_to_18_years)_[male]`,1)
+family_info_2$`Adults_(18_to_60_years)_[female]` <- right(family_info_2$`Adults_(18_to_60_years)_[female]`,1)
+family_info_2$`Adults_(18_to_60_years)_[Other]` <- right(family_info_2$`Adults_(18_to_60_years)_[Other]`,1)
+family_info_2$`Adults_(18_to_60_years)_[male]` <- right(family_info_2$`Adults_(18_to_60_years)_[male]`,1)
+family_info_2$`Elderly_(above_60_years)_[she]` <- right(family_info_2$`Elderly_(above_60_years)_[she]`,1)
+family_info_2$`Elderly_(above_60_years)_[men]` <- right(family_info_2$`Elderly_(above_60_years)_[men]`,1)
+
+```
+=====================================================================================================================
+  (2) Sorting out comma separated values in types of heating
+---------------------------------------------------------------------------------------------------------------------
+```{r initialize}
+
+#separating columns using cSplit
+family_info_3 <- data.frame(cSplit(family_info_2, c("heat_kitchen_appliance"), c(",")))
+
+#convert factors to character
+family_info_3$heat_kitchen_appliance_1 <- as.character(family_info_3$heat_kitchen_appliance_1)
+family_info_3$heat_kitchen_appliance_2 <- as.character(family_info_3$heat_kitchen_appliance_2)
+family_info_3$heat_kitchen_appliance_3 <- as.character(family_info_3$heat_kitchen_appliance_3)
+family_info_3$heat_kitchen_appliance_4 <- as.character(family_info_3$heat_kitchen_appliance_4)
+
+#convert nas to 0
+family_info_3[is.na(family_info_3)] <- 0
+
+#testing the above separation
+table(family_info_3$heat_kitchen_appliance_1)
+table(family_info_3$heat_kitchen_appliance_2)
+table(family_info_3$heat_kitchen_appliance_3)
+table(family_info_3$heat_kitchen_appliance_4)
+family_info_3$flag <- 1
+
+#samving final dataset and rdata
+save(family_info_3,file="C:/Users/ss21418/Desktop/Personal project/Output Rdatas/Cleaned_Data.Rdata")
+write.csv(family_info_3, file = "C:/Users/ss21418/Desktop/Personal project/Output files/Cleaned_data.csv", sep="|")
+write.xlsx(family_info_3, file = "C:/Users/ss21418/Desktop/Personal project/Output files/Cleaned_data.xlsx")
+```

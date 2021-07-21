@@ -1,0 +1,262 @@
+---
+title: "Exploratory Data Analysis"
+author: "Suparna Shetty"
+date: "5/11/2021"
+output: html_document
+---
+
+=====================================================================================================================
+  (0) Initialization: Load libraries 
+---------------------------------------------------------------------------------------------------------------------
+```{r initialize}
+#empty environment
+rm(list=ls())
+library("splitstackshape")
+library("openxlsx")
+library("readxl")
+library("readr")
+library("rmarkdown")
+library("stringi")
+library("stringr")
+library("testthat")
+library("tidyr")
+library("tidyselect")
+library("validate")
+library("zip")
+library("R.utils")
+library("plotrix")
+library("bit64")
+library("plotly")
+library("ggplot2")
+#install.packages("scales", dependencies = TRUE)
+library(scales)
+library(data.table)
+library(dplyr)
+```
+=====================================================================================================================
+  (0) Initialization: Load files 
+---------------------------------------------------------------------------------------------------------------------
+```{r initialize}
+#get cleaned data
+
+load("C:/Users/ss21418/Desktop/Personal project/Output Rdatas/Cleaned_Data.Rdata")
+
+```
+
+=====================================================================================================================
+  (1) Rationing : Part A:- Creating Pie chart to understand distribution by ration card colour
+---------------------------------------------------------------------------------------------------------------------
+```{r rationa}
+#change column name
+family_info_3 <- rename(family_info_3,ration_colour_code=What_is_your_ration_card_to_the_following.)
+
+#overall what percentage comprises of yellow, orange and white
+ration_colour <- as.data.frame(summarise(group_by(family_info_3,ration_colour_code), "No_of_people" = sum(flag)))
+
+#get data from the dataset in percentage format
+table_percent <- ration_colour %>%
+  mutate(
+    ration_colour_code = factor(ration_colour_code,
+                                levels = ration_colour_code[length(ration_colour_code):1]),
+    cumulative = cumsum(No_of_people),
+    midpoint = cumulative - No_of_people / 2,
+    labels = paste0(round((
+      No_of_people / sum(No_of_people)
+    ) * 100, 1), "%")
+  )
+
+
+#plot pie chart to understand distribution
+final_pie <-
+  ggplot(table_percent,
+         aes(x = "", y = No_of_people, fill = ration_colour_code)) + geom_bar(width = 1, stat = "identity") +
+         coord_polar(theta = "y", start = 0) + scale_fill_manual(values = c("yellow", "white", "grey", "orange")) + 
+         labs(x = "", y = "Number of people", title = "Division based on Ration card colour \n", fill = "Ration Card Colour Code") + 
+         geom_text(aes(x = 1.2, y = midpoint , label = labels), color = "black", fontface = "bold") + 
+         theme(plot.title = element_text(hjust = 0.5),legend.title = element_text(hjust = 0.5, face = "bold", size = 10), axis.text.x=element_blank()
+        ) 
+```
+=====================================================================================================================
+   (1) Rationing : Part B:- Focus on whether the Yellow and orange categories receive rationing
+---------------------------------------------------------------------------------------------------------------------
+```{r rationb}
+#we noticed from the above analysis that yellow and orange card are prevelant in most villages so our focus now would be to see if all of the yellow and oranges recieve rations
+
+
+yellow_count_overall <-
+  as.data.frame(summarise(
+    group_by(family_info_3[family_info_3$ration_colour_code == "yellow",], ration_colour_code,get_ration_every_month_from_shop.), "Count"=sum(flag)
+  ))
+
+orange_count_overall <-
+  as.data.frame(summarise(
+    group_by(family_info_3[family_info_3$ration_colour_code == "orange",], ration_colour_code,get_ration_every_month_from_shop.), "Count"=sum(flag)
+  ))
+
+
+
+yellow_orange_count_overall <- rbind(yellow_count_overall,orange_count_overall)
+
+#edit
+yellow_orange_count_overall$ration_colour_code <- ifelse(yellow_orange_count_overall$ration_colour_code=="orange","Orange","Yellow")
+
+yellow_orange_count_overall$get_ration_every_month_from_shop. <- ifelse(yellow_orange_count_overall$get_ration_every_month_from_shop.=="no","No","Yes")
+
+#Plot a bar
+
+bar <- ggplot(yellow_orange_count_overall, aes(fill=get_ration_every_month_from_shop., y=Count, x=ration_colour_code)) + geom_bar(position="dodge", stat="identity") + labs(x = "Ration Card Colour", y = "Number of households", title = "Division based on receiving monthly ration \n", fill = "Receives monthly ration from shops?") + scale_fill_manual(values = c("black", "dark grey")) + theme_classic()
+
+
+```
+=====================================================================================================================
+   (1) Rationing : Part C:- Focus on states which arent receiving rations in either
+---------------------------------------------------------------------------------------------------------------------
+```{r rationb}
+#all NOs can be plotted by states
+
+#yellow card
+#get count by state
+yellow_count_by_state <-
+  as.data.frame(summarise(
+    group_by(family_info_3[family_info_3$ration_colour_code == "yellow" & family_info_3$get_ration_every_month_from_shop. == "no",], ration_colour_code,state), "Count"=sum(flag)
+  ))
+#remove 0 state
+yellow_count_by_state <- yellow_count_by_state[yellow_count_by_state$state!=0,]
+#sort by count
+yellow_count_by_state <- setorder(yellow_count_by_state,-Count)
+
+#orange card
+#get count by state
+orange_count_by_state <-
+  as.data.frame(summarise(
+    group_by(family_info_3[family_info_3$ration_colour_code == "orange" & family_info_3$get_ration_every_month_from_shop. == "no",], ration_colour_code,state), "Count"=sum(flag)
+  ))
+#remove 0 state
+orange_count_by_state <- orange_count_by_state[orange_count_by_state$state!=0,]
+#sort by count
+orange_count_by_state <- setorder(orange_count_by_state,-Count)
+
+#plot yellow card no by state
+bar_yellow <- ggplot(yellow_count_by_state, aes(x=reorder(state,-Count),y=Count)) + geom_bar(position="dodge", stat="identity", fill="yellow", color="black")+ labs(x = "States", y = "Number of households") + theme_classic()
+
+#since maharashtra is highest find distribution among districts
+yellow_count_by_dist <-
+  as.data.frame(summarise(
+    group_by(family_info_3[family_info_3$ration_colour_code == "yellow" & family_info_3$get_ration_every_month_from_shop. == "no" & family_info_3$state=="Maharashtra"& family_info_3$District!=0,], ration_colour_code,District), "Count"=sum(flag)
+  ))
+bar_yellow_dist <- ggplot(yellow_count_by_dist, aes(x=reorder(District,-Count),y=Count)) + geom_bar(position="dodge", stat="identity", fill="yellow", color="black")+ labs(x = "Districts", y = "Number of households") + theme_classic()
+
+#plot orange card no by state
+bar_orange <- ggplot(orange_count_by_state, aes(x=reorder(state,-Count),y=Count)) + geom_bar(position="dodge", stat="identity", fill="orange", color="black")+ labs(x = "States", y = "Number of households") + theme_classic()
+
+#since max is maharashtra plot by district
+orange_count_by_dist <-
+  as.data.frame(summarise(
+    group_by(family_info_3[family_info_3$ration_colour_code == "orange" & family_info_3$get_ration_every_month_from_shop. == "no" & family_info_3$state=="Maharashtra"& family_info_3$District!=0,], ration_colour_code,District), "Count"=sum(flag)
+  ))
+bar_orange_dist <- ggplot(orange_count_by_dist[orange_count_by_dist$Count>5,], aes(x=reorder(District,-Count),y=Count)) + geom_bar(position="dodge", stat="identity", fill="orange", color="black")+ labs(x = "Districts", y = "Number of households") + theme_classic()
+
+#pune and solapur
+```
+=====================================================================================================================
+   (2) Healthcare : Part A:- Average amount spent on Healtcare
+---------------------------------------------------------------------------------------------------------------------
+```{r health}
+#avg spent on healthcare
+
+#convert amount spent to numeric
+family_info_3$Illness_on_your_family_how_much_the_monthly_cost_of_approximately. <- as.numeric(family_info_3$Illness_on_your_family_how_much_the_monthly_cost_of_approximately.)
+
+#remove records with 0 as state
+health <- family_info_3[family_info_3$state!=0,]
+
+#In order to get a better idea about average or median a larger dataset is useful hence its better to consider states with atleast 100 records
+check_state_count <- as.data.frame(summarise(group_by(health,state), "No_of_state_occurrence" = sum(flag)))
+health <- merge(health,check_state_count,by="state",all.x=T)
+health2 <- health[health$No_of_state_occurrence>100,]
+
+#create a box plot to understand distribution across states
+p<-ggplot(health2, aes(x=state, y=Illness_on_your_family_how_much_the_monthly_cost_of_approximately.)) +
+  geom_boxplot(fill='#A4A4A4', color="black") + theme_classic() + labs(x = "State", y = "Amount spent on Healthcare")
+  
+
+```
+=====================================================================================================================
+   (2) Healthcare : Part B:- Drill Down on Maharashtra data with those greater than average
+---------------------------------------------------------------------------------------------------------------------
+```{r health}
+#avg spent on healthcare
+
+maha <- health2[health2$state=="Maharashtra" & health2$Illness_on_your_family_how_much_the_monthly_cost_of_approximately.>2500,]
+
+#create a box plot to understand distribution across states
+dist<-ggplot(maha, aes(x=District, y=Illness_on_your_family_how_much_the_monthly_cost_of_approximately.)) +
+  geom_boxplot(fill='#A4A4A4', color="black") + theme_classic() + labs(x = "Disricts within Maharashtra", y = "Amount spent on Healthcare")
+
+```
+=====================================================================================================================
+   (3) Housing : Part A:- Types of Housing
+---------------------------------------------------------------------------------------------------------------------
+```{r health}
+#Pie to show types of Housing
+house_type <- as.data.frame(summarise(group_by(family_info_3,Type_of_house_construction), "No_of_house_occurrence" = sum(flag)))
+house_type <- house_type[house_type$Type_of_house_construction!=0,]
+#get data from the dataset in percentage format
+house_type_percent <- house_type %>%
+  mutate(
+    Type_of_house_construction = factor(Type_of_house_construction,
+                                levels = Type_of_house_construction[length(Type_of_house_construction):1]),
+    cumulative = cumsum(No_of_house_occurrence),
+    midpoint = cumulative - No_of_house_occurrence / 2,
+    labels = paste0(round((
+      No_of_house_occurrence / sum(No_of_house_occurrence)
+    ) * 100, 1), "%")
+  )
+
+
+#plat pie chart to understand distribution
+house_pie <-
+  ggplot(house_type_percent,
+         aes(x = "", y = No_of_house_occurrence, fill = Type_of_house_construction)) + geom_bar(width = 1, stat = "identity") +
+         coord_polar(theta = "y", start = 0) + scale_fill_grey() + 
+         labs(x = "", y = "Number of people", title = "Division based on Types of Houses \n", fill = "Type of Housing") + 
+         geom_text(aes(x = 1.2, y = midpoint , label = labels), color = "white", fontface = "bold") + 
+         theme(plot.title = element_text(hjust = 0.5),legend.title = element_text(hjust = 0.5, face = "bold", size = 10), axis.text.x=element_blank()
+        ) 
+
+```
+=====================================================================================================================
+   (3) Housing : Part B:- How many of these houses do not have their own toilets
+---------------------------------------------------------------------------------------------------------------------
+```{r health}
+#Pie to show types of Housing
+house_type_toilet <- as.data.frame(summarise(group_by(family_info_3,own_toilet,Type_of_house_construction), "No_of_house_occurrence" = sum(flag)))
+house_type_toilet <- house_type_toilet[house_type_toilet$Type_of_house_construction!=0,]
+
+bar_toilet <- ggplot(house_type_toilet, aes(fill=own_toilet, y=No_of_house_occurrence, x=Type_of_house_construction)) + geom_bar(position="dodge", stat="identity")+ theme_classic()+labs(x = "Type of house construction", y = "Number of houses", title = "Check relation between type of house and toilets within the house \n", fill = "Have their own toilet?")+ scale_fill_grey()
+
+#As expected those with houses made out of mud or metal sheets have almost a 50-50 distribution between those with their own toilets and those who do not. Comparing this ratio also lets us know that in case of houses completely made of cement which of the strongest also tend to have their own washrooms
+
+#Thus we can focus on those who do not have washrooms in the metal sheet and mud and metal category
+final_toilet_category <- family_info_3[family_info_3$own_toilet=="no" & family_info_3$Type_of_house_construction!="Complete cement slab" &family_info_3$Type_of_house_construction!="0" & family_info_3$state!="0",]
+
+final_toilet_category_1 <- as.data.frame(summarise(group_by(final_toilet_category,state), "No_of_occurrence" = sum(flag)))
+
+#plot to find highest state
+toilet_state_graph <- ggplot(final_toilet_category_1, aes(y=No_of_occurrence, x=state)) + geom_bar(position="dodge", stat="identity")+ coord_flip()+ labs(x = "States", y = "Numnber of Households")+ theme_classic()
+
+district <- final_toilet_category[final_toilet_category$state=="Maharashtra" & final_toilet_category$District!=0,]
+district_1 <- as.data.frame(summarise(group_by(final_toilet_category,District), "No_of_occurrence" = sum(flag)))
+district_2 <- district_1[district_1$No_of_occurrence>20,]
+
+#plot to find highest dist
+toilet_disrict_graph <- ggplot(district_2, aes(y=No_of_occurrence, x=District)) + geom_bar(position="dodge", stat="identity")+ coord_flip()+ labs(x = "Disricts within Maharashtra", y = "Numnber of Households")+ theme_classic()
+
+#from the results we can clearly see that the next drive should be in pune
+```
+=====================================================================================================================
+   (3) Emergency Awareness : Part A:- Which district should be focussed on for healthcare awareness
+---------------------------------------------------------------------------------------------------------------------
+```{r health}
+emergency <- family_info_3[family_info_3$state=="Maharashtra" & family_info_3$heat_kitchen_appliance_1 %in% c("wood","coal","kerosene"),]
+```
